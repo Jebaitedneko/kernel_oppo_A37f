@@ -88,14 +88,17 @@ static int test_task_flag(struct task_struct *p, int flag)
 {
 	struct task_struct *t = p;
 
-	do {
+	rcu_read_lock();
+	for_each_thread(p, t) {
 		task_lock(t);
 		if (test_tsk_thread_flag(t, flag)) {
 			task_unlock(t);
+			rcu_read_unlock();
 			return 1;
 		}
 		task_unlock(t);
-	} while_each_thread(p, t);
+	}
+	rcu_read_unlock();
 
 	return 0;
 }
@@ -123,10 +126,6 @@ static void swap_fn(struct work_struct *work)
 		short oom_score_adj;
 
 		if (tsk->flags & PF_KTHREAD)
-			continue;
-
-		/* if task no longer has any memory ignore it */
-		if (test_task_flag(tsk, TIF_MM_RELEASED))
 			continue;
 
 		if (test_task_flag(tsk, TIF_MEMDIE))
@@ -165,32 +164,30 @@ static void swap_fn(struct work_struct *work)
 		}
 	}
 
-	for (i = 0; i < si; i++) {
-		get_task_struct(selected[i].p);
+	for (i = 0; i < si; i++)
 		total_sz += selected[i].tasksize;
-	}
-
-	rcu_read_unlock();
 
 	/* Skip reclaim if total size is too less */
 	if (total_sz < SWAP_CLUSTER_MAX) {
-		for (i = 0; i < si; i++)
-			put_task_struct(selected[i].p);
+		rcu_read_unlock();
 		return;
 	}
 
-	while (si--) {
+	for (i = 0; i < si; i++)
+		get_task_struct(selected[i].p);
+
+	rcu_read_unlock();
+
+#ifdef VENDOR_EDIT
+/* fanhui@PhoneSW.BSP, 2015/09/15, fix the memory leakage of task_struct */
+	si--;
+	while (si>=0) {
+#endif
 		nr_to_reclaim =
 			(selected[si].tasksize * per_swap_size) / total_sz;
 		/* scan atleast a page */
 		if (!nr_to_reclaim)
 			nr_to_reclaim = 1;
-
-		if ((test_task_flag(selected[si].p, TIF_MM_RELEASED))
-			|| (test_task_flag(selected[si].p, TIF_MEMDIE))) {
-			put_task_struct(selected[si].p);
-			continue;
-		}
 
 		rp = reclaim_task_anon(selected[si].p, nr_to_reclaim);
 
@@ -201,6 +198,10 @@ static void swap_fn(struct work_struct *work)
 		total_scan += rp.nr_scanned;
 		total_reclaimed += rp.nr_reclaimed;
 		put_task_struct(selected[si].p);
+#ifdef VENDOR_EDIT
+/* fanhui@PhoneSW.BSP, 2015/09/15, fix the memory leakage of task_struct */
+		si--;
+#endif
 	}
 
 	if (total_scan) {
@@ -236,8 +237,13 @@ static int vmpressure_notifier(struct notifier_block *nb,
 		return 0;
 
 	if ((pressure >= pressure_min) && (pressure < pressure_max))
-		if (!work_pending(&swap_work))
+		if (!work_pending(&swap_work)){
+			#ifndef VENDOR_EDIT //yixue.ge@bsp.drv  2015-09-09 modify for use unbounded cpu workqueue
 			schedule_work(&swap_work);
+			#else
+			queue_work(system_unbound_wq, &swap_work);
+			#endif
+		}
 	return 0;
 }
 
