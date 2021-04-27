@@ -469,7 +469,7 @@
 		qcom,vdd-voltage-level = <1 5 7>;
 
 		qcom,hsusb-otg-phy-init-seq =
-			<0x44 0x80 0x6B 0x81 0x24 0x82 0x13 0x83 0xffffffff>;
+			<0x74 0x80 0x6B 0x81 0x24 0x82 0x13 0x83 0xffffffff>;
 		qcom,hsusb-otg-phy-type = <2>;
 		qcom,hsusb-otg-mode = <1>;
 		qcom,hsusb-otg-otg-control = <2>;
@@ -752,7 +752,11 @@
 		reg = <0xb017000 0x1000>;
 		reg-names = "wdt-base";
 		interrupts = <0 3 0>, <0 4 0>;
-		qcom,bark-time = <11000>;
+		//#ifdef VENDOR_EDIT //yixue.ge modify bark time to 20s
+		//qcom,bark-time = <11000>;
+		//#else
+		qcom,bark-time = <20000>;
+		//#endif
 		qcom,pet-time = <10000>;
 		qcom,ipi-ping;
 	};
@@ -1330,8 +1334,10 @@
 		clocks = <&clock_rpm clk_xo_wlan_clk>,
 			 <&clock_rpm clk_rf_clk2>,
 			 <&clock_debug clk_gcc_debug_mux>,
-			 <&clock_gcc clk_wcnss_m_clk>;
-		clock-names = "xo", "rf_clk", "measure", "wcnss_debug";
+			 <&clock_gcc clk_wcnss_m_clk>,
+			 <&clock_gcc clk_gcc_snoc_qosgen_clk>;
+		clock-names = "xo", "rf_clk", "measure", "wcnss_debug",
+				"snoc_qosgen";
 
 		qcom,has-autodetect-xo;
 		qcom,wlan-rx-buff-count = <512>;
@@ -1649,6 +1655,11 @@
 		/* GPIO output to mss */
 		qcom,gpio-force-stop = <&smp2pgpio_ssr_smp2p_1_out 0 0>;
 		linux,contiguous-region = <&modem_adsp_mem>;
+
+		mba_mss: qcom,mba-mem@0 {
+			compatible = "qcom,pil-mba-mem";
+			linux,contiguous-region = <&mba_mem>;
+		};
 	};
 
 	qcom,vidc@1d00000 {
