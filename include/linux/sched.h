@@ -551,6 +551,7 @@ struct signal_struct {
 	atomic_t		sigcnt;
 	atomic_t		live;
 	int			nr_threads;
+	struct list_head	thread_head;
 
 	wait_queue_head_t	wait_chldexit;	/* for wait4() */
 
@@ -1271,6 +1272,7 @@ struct task_struct {
 	/* PID/PID hash table linkage. */
 	struct pid_link pids[PIDTYPE_MAX];
 	struct list_head thread_group;
+	struct list_head thread_node;
 
 	struct completion *vfork_done;		/* for vfork() */
 	int __user *set_child_tid;		/* CLONE_CHILD_SETTID */
@@ -1743,6 +1745,10 @@ static inline void sched_set_io_is_busy(int val) {};
  * Per process flags
  */
 #define PF_EXITING	0x00000004	/* getting shut down */
+#ifdef VENDOR_EDIT
+/* fanhui@PhoneSW.BSP, 2016/02/02, DeathHealer, set the task to be killed */
+#define PF_OPPO_KILLING	0x00000002
+#endif
 #define PF_EXITPIDONE	0x00000008	/* pi exit done on shut down */
 #define PF_VCPU		0x00000010	/* I'm a virtual CPU */
 #define PF_WQ_WORKER	0x00000020	/* I'm a workqueue worker */
@@ -2336,6 +2342,16 @@ extern bool current_is_single_threaded(void);
 #define while_each_thread(g, t) \
 	while ((t = next_thread(t)) != g)
 
+#define __for_each_thread(signal, t)	\
+	list_for_each_entry_rcu(t, &(signal)->thread_head, thread_node)
+
+#define for_each_thread(p, t)		\
+	__for_each_thread((p)->signal, t)
+
+/* Careful: this is a double loop, 'break' won't work as expected. */
+#define for_each_process_thread(p, t)	\
+	for_each_process(p) for_each_thread(p, t)
+
 static inline int get_nr_threads(struct task_struct *tsk)
 {
 	return tsk->signal->nr_threads;
@@ -2567,6 +2583,16 @@ static inline int fatal_signal_pending(struct task_struct *p)
 {
 	return signal_pending(p) && __fatal_signal_pending(p);
 }
+//#ifdef VENDOR_EDIT //fangpan@Swdp.shanghai,2015/11/12
+static inline int hung_long_and_fatal_signal_pending(struct task_struct *p)
+{
+#ifdef CONFIG_DETECT_HUNG_TASK
+	return fatal_signal_pending(p) && (p->flags & PF_OPPO_KILLING);
+#else
+	return 0;
+#endif
+}
+//#endif
 
 static inline int signal_pending_state(long state, struct task_struct *p)
 {
