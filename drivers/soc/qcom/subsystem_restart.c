@@ -517,6 +517,12 @@ static void subsystem_ramdump(struct subsys_device *dev, void *data)
 	dev->do_ramdump_on_put = false;
 }
 
+static void subsystem_free_memory(struct subsys_device *dev, void *data)
+{
+	if (dev->desc->free_memory)
+		dev->desc->free_memory(dev->desc);
+}
+
 static void subsystem_powerup(struct subsys_device *dev, void *data)
 {
 	const char *name = dev->desc->name;
@@ -710,6 +716,8 @@ void subsystem_put(void *subsystem)
 	}
 	mutex_unlock(&track->lock);
 
+	subsystem_free_memory(subsys, NULL);
+
 	subsys_d = find_subsys(subsys->desc->depends_on);
 	if (subsys_d) {
 		subsystem_put(subsys_d);
@@ -775,6 +783,8 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 	/* Collect ram dumps for all subsystems in order here */
 	for_each_subsys_device(list, count, NULL, subsystem_ramdump);
 
+	for_each_subsys_device(list, count, NULL, subsystem_free_memory);
+
 	notify_each_subsys_device(list, count, SUBSYS_BEFORE_POWERUP, NULL);
 	for_each_subsys_device(list, count, NULL, subsystem_powerup);
 	notify_each_subsys_device(list, count, SUBSYS_AFTER_POWERUP, NULL);
@@ -831,6 +841,22 @@ static void device_restart_work_hdlr(struct work_struct *work)
 	panic("subsys-restart: Resetting the SoC - %s crashed.",
 							dev->desc->name);
 }
+
+#ifdef VENDOR_EDIT //yixue.ge add for modem subsystem crash 
+int subsystem_restart_dev_level(struct subsys_device *dev,int restart_level)
+{
+	int rc = 0; 
+	int restart_level_bak = dev->restart_level;
+	if(restart_level >= 0)
+		dev->restart_level = restart_level;
+	
+	rc = subsystem_restart_dev(dev);
+
+	dev->restart_level = restart_level_bak;
+	return rc;
+}
+
+#endif
 
 int subsystem_restart_dev(struct subsys_device *dev)
 {

@@ -14,6 +14,7 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/of_platform.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
 #include <linux/ioport.h>
@@ -43,6 +44,8 @@
 
 #define subsys_to_drv(d) container_of(d, struct modem_data, subsys_desc)
 
+
+#ifndef VENDOR_EDIT //yixue.ge add for modem subsystem crash 
 static void log_modem_sfr(void)
 {
 	u32 size;
@@ -65,12 +68,63 @@ static void log_modem_sfr(void)
 	smem_reason[0] = '\0';
 	wmb();
 }
+#else
+extern void mdmreason_set(char * buf);
+static int log_modem_sfr(void)
+{
+	u32 size;
+	int rc = -1;
+	char *smem_reason, reason[MAX_SSR_REASON_LEN];
 
+	smem_reason = smem_get_entry_no_rlock(SMEM_SSR_REASON_MSS0, &size, 0,
+							SMEM_ANY_HOST_FLAG);
+	if (!smem_reason || !size) {
+		pr_err("modem subsystem failure reason: (unknown, smem_get_entry_no_rlock failed).\n");
+		return rc;
+	}
+	if (!smem_reason[0]) {
+		pr_err("modem subsystem failure reason: (unknown, empty string found).\n");
+		return rc;
+	}
+	strlcpy(reason, smem_reason, min(size, MAX_SSR_REASON_LEN));
+	mdmreason_set(reason);
+	pr_err("modem subsystem failure reason: %s.\n", reason);
+
+	if(strstr(reason, "OPPO_MODEM_NO_RAMDUMP_EXPECTED")){
+		pr_err("%s will subsys reset",__func__);
+		rc = 1; //set RELATED reset
+	}
+	
+	smem_reason[0] = '\0';
+	wmb();
+	return rc;
+}
+
+#endif
+
+#ifdef CONFIG_RECORD_MDMRST
+//extern wait_queue_head_t mdmrst_wq;
+//extern unsigned int mdmrest_flg;
+extern unsigned int mdmrest_count;
+#endif
 static void restart_modem(struct modem_data *drv)
 {
+	#ifdef VENDOR_EDIT //yixue.ge modify
+	int restart_level = log_modem_sfr();
+	#else
 	log_modem_sfr();
+	#endif
+#ifdef CONFIG_RECORD_MDMRST
+    //mdmrest_flg = 1;
+    //wake_up(&mdmrst_wq);
+	mdmrest_count++;
+#endif
 	drv->ignore_errors = true;
+	#ifndef VENDOR_EDIT //yixue.ge modify
 	subsystem_restart_dev(drv->subsys);
+	#else
+	subsystem_restart_dev_level(drv->subsys,restart_level);
+	#endif
 }
 
 static irqreturn_t modem_err_fatal_intr_handler(int irq, void *dev_id)
@@ -153,6 +207,13 @@ static void modem_crash_shutdown(const struct subsys_desc *subsys)
 	}
 }
 
+static void modem_free_memory(const struct subsys_desc *subsys)
+{
+	struct modem_data *drv = subsys_to_drv(subsys);
+
+	pil_free_memory(&drv->q6->desc);
+}
+
 static int modem_ramdump(int enable, const struct subsys_desc *subsys)
 {
 	struct modem_data *drv = subsys_to_drv(subsys);
@@ -203,6 +264,7 @@ static int pil_subsys_init(struct modem_data *drv,
 	drv->subsys_desc.shutdown = modem_shutdown;
 	drv->subsys_desc.powerup = modem_powerup;
 	drv->subsys_desc.ramdump = modem_ramdump;
+	drv->subsys_desc.free_memory = modem_free_memory;
 	drv->subsys_desc.crash_shutdown = modem_crash_shutdown;
 	drv->subsys_desc.err_fatal_handler = modem_err_fatal_intr_handler;
 	drv->subsys_desc.stop_ack_handler = modem_stop_ack_intr_handler;
@@ -352,6 +414,11 @@ static int pil_mss_driver_probe(struct platform_device *pdev)
 	}
 	init_completion(&drv->stop_ack);
 
+	/* Probe the MBA mem device if present */
+	ret = of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
+	if (ret)
+		return ret;
+
 	return pil_subsys_init(drv, pdev);
 }
 
@@ -364,6 +431,33 @@ static int pil_mss_driver_exit(struct platform_device *pdev)
 	pil_desc_release(&drv->q6->desc);
 	return 0;
 }
+
+static int pil_mba_mem_driver_probe(struct platform_device *pdev)
+{
+	struct modem_data *drv;
+
+	if (!pdev->dev.parent)
+		return -EINVAL;
+
+	drv = dev_get_drvdata(pdev->dev.parent);
+	drv->mba_mem_dev_fixed = &pdev->dev;
+
+	return 0;
+}
+
+static struct of_device_id mba_mem_match_table[] = {
+	{ .compatible = "qcom,pil-mba-mem" },
+	{}
+};
+
+static struct platform_driver pil_mba_mem_driver = {
+	.probe = pil_mba_mem_driver_probe,
+	.driver = {
+		.name = "pil-mba-mem",
+		.of_match_table = mba_mem_match_table,
+		.owner = THIS_MODULE,
+	},
+};
 
 static struct of_device_id mss_match_table[] = {
 	{ .compatible = "qcom,pil-q6v5-mss" },
@@ -384,7 +478,13 @@ static struct platform_driver pil_mss_driver = {
 
 static int __init pil_mss_init(void)
 {
-	return platform_driver_register(&pil_mss_driver);
+	int ret;
+
+	ret = platform_driver_register(&pil_mba_mem_driver);
+	if (!ret)
+		ret = platform_driver_register(&pil_mss_driver);
+
+	return ret;
 }
 module_init(pil_mss_init);
 
