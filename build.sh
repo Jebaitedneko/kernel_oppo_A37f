@@ -3,12 +3,13 @@
 # Prepared by Jebaitedneko <jebaitedneko@gmail.com>
 
 KROOT=$(pwd)
+[ ! -d $KROOT/out ] && mkdir out || rm -rf out | mkdir out
 
 DARCH=arm64
-DEFCG=holland2_defconfig
-ZNAME=holland2
+DEFCG=msm-perf_defconfig
+ZNAME=a37f
 CACHE=1
-TOOLC=3
+TOOLC=1
 
 MODIR=$KROOT/out/modules
 OSDIR=$KROOT/out/arch/$DARCH/boot
@@ -229,8 +230,6 @@ ui_print "*******************************************"
 ui_print "Updating Kernel and Patching cmdline..."
 ui_print "*******************************************"
 
-patch_cmdline firmware_class.path firmware_class.path=/vendor/firmware_mnt/image
-patch_cmdline lpm_levels.sleep_disabled lpm_levels.sleep_disabled=0
 patch_cmdline androidboot.selinux androidboot.selinux=permissive
 
 write_boot;
@@ -243,7 +242,7 @@ fi
 chmod +x $AKDIR/anykernel.sh
 
 make_dtimg() {
-	wget -q https://raw.githubusercontent.com/LineageOS/android_system_tools_dtbtool/lineage-18.1/dtbtool.c -O $KROOT/out/dtbtool.c
+	wget -q https://raw.githubusercontent.com/Jebaitedneko/kernel_oppo_A37f/lineage-17.1/anykernel3/dtbtool.c -O $KROOT/out/dtbtool.c
 	cc $KROOT/out/dtbtool.c -o $OSDIR/dts
 	(
 		cd $OSDIR/dts
@@ -264,7 +263,7 @@ make_dtimg() {
 				cp $OSDIR/Image $AKDIR && make_dtimg
 			fi
 		else
-			cp $OSDIR/Image.gz $AKDIR && make_dtimg
+			cp $OSDIR/Image $AKDIR && make_dtimg
 		fi
 	else
 		cp $OSDIR/Image.gz-dtb $AKDIR
