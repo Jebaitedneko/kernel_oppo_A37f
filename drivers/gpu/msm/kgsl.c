@@ -4202,10 +4202,6 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 	unsigned long gpumap_free_addr = 0;
 	bool flag_top_down = true;
 	struct vm_unmapped_area_info info;
-#ifdef VENDOR_EDIT
-/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2016/05/07  Add for keylog */
-	static uint64_t keylog_count = 0;
-#endif /*VENDOR_EDIT*/
 
 	if (vma_offset == device->memstore.gpuaddr)
 		return get_unmapped_area(NULL, addr, len, pgoff, flags);
@@ -4391,23 +4387,10 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 	}
 
 put:
-#ifndef VENDOR_EDIT
-/* Xiaori.Yuan@Mobile Phone Software Dept.Driver, 2016/05/07  Modify for keylog */
 	if (IS_ERR_VALUE(ret))
 		KGSL_MEM_ERR(device,
 				"pid %d pgoff %lx len %ld failed error %ld\n",
 				private->pid, pgoff, len, ret);
-#else /*VENDOR_EDIT*/
-	if (IS_ERR_VALUE(ret)){
-		KGSL_MEM_ERR_RATELIMITED(device,
-				"pid %d pgoff %lx len %ld failed error %ld\n",
-				private->pid, pgoff, len, ret);
-		if(0 == keylog_count%100){
-			mm_keylog_write("kgsl_get_unmapped_area failed\n", "GPU OOM,app black screen\n", TYPE_IOMMU_ERROR);
-		}
-		keylog_count++;
-	}
-#endif /*VENDOR_EDIT*/
 	kgsl_mem_entry_put(entry);
 	return ret;
 }
