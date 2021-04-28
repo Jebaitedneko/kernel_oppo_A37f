@@ -6,7 +6,7 @@ KROOT=$(pwd)
 [ ! -d $KROOT/out ] && mkdir out || rm -rf out | mkdir out
 
 DARCH=arm64
-DEFCG=msm-perf_defconfig
+DEFCG=a37f_defconfig
 ZNAME=a37f
 CACHE=1
 TOOLC=1
