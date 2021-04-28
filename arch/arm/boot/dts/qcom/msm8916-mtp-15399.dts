@@ -1,4 +1,5 @@
-/* Copyright (c) 2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2021, The Linux Foundation. All rights reserved.
+*  Copyright (c) 2021, Jebaitedneko.
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License version 2 and
@@ -14,10 +15,10 @@
 
 #include "msm8916-mtp.dtsi"
 #include "msm8916-memory.dtsi"
+#include "15399/overlay.dtsi"
 
 / {
 	model = "Qualcomm Technologies, Inc. MSM 8916 MTP";
 	compatible = "qcom,msm8916-mtp", "qcom,msm8916", "qcom,mtp";
 	qcom,board-id = <8 0 15399>;
 };
-

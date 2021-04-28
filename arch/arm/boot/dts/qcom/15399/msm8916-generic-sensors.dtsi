@@ -1,5 +1,5 @@
-#include "msm8916.dtsi"
-#include "msm8916-pinctrl.dtsi"
+#include "../msm8916.dtsi"
+#include "../msm8916-pinctrl.dtsi"
 
 &i2c_0 { /* BLSP1 QUP2 */
 	mpu6050@68 { /* Gyroscope and accelerometer sensor combo */
