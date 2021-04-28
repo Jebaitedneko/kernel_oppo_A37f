@@ -73,9 +73,8 @@ zinstall install: vmlinux
 
 dtbs: scripts
 	$(Q)$(MAKE) $(build)=$(boot)/dts dtbs
-#	$(Q)$(MAKE) $(build)=$(boot)/dts/qcom dtbs
-#huqiao@EXP.BasicDrv.Basic add for clone 15399	
-	$(Q)$(MAKE) $(build)=$(boot)/dts/15399 dtbs
+	$(Q)$(MAKE) $(build)=$(boot)/dts/qcom dtbs
+
 PHONY += vdso_install
 vdso_install:
 	$(Q)$(MAKE) $(build)=arch/arm64/kernel/vdso $@
